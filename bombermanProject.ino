@@ -24,6 +24,7 @@ enum GameStateEnum {
 };
 GameStateEnum gameState = HELLO_SCREEN, oldGameState = HELLO_SCREEN;
 byte volumeToggle = EEPROM.read(18);
+const unsigned int buzzerPin = 5;
 int menuSelection = INIT_MENU_SELECTION;
 const unsigned int menuMessageScrollTime = 500, menuScrollTime = 500;
 unsigned long currentMessageScrollTime, currentScrollTime;
@@ -32,10 +33,10 @@ unsigned long currentMessageScrollTime, currentScrollTime;
 const unsigned int rs = 9,
                    en = 8,
                    d4 = 7,
-                   d5 = 6,
-                   d6 = 5,
-                   d7 = 4,
-                   pwmPin = 3;
+                   d5 = 4,
+                   d6 = 3,
+                   d7 = 2,
+                   pwmPin = 6;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 byte bombChar[8] = {
   0b00110,
@@ -92,8 +93,8 @@ const unsigned int xAxis = A4,
                    yAxis = A5,
                    swPin = 1;
 unsigned int xValue, yValue;
-byte lastSwButtonState = LOW, swButtonState = HIGH;
-unsigned long lastSwDebounceTime = 0, debounceDelay = 50;
+byte lastSwButtonState = HIGH, swButtonState = HIGH;
+unsigned long lastSwDebounceTime = millis(), debounceDelay = 50;
 
 // Declare the variables for the game
 static unsigned long gameSeconds = 300,
@@ -124,11 +125,12 @@ int enemies[BASE_NUMBER_ENEMIES + MAX_ARENA_SIZE][2], totalEnemies,
 bool gamemodeInit = false, playerBlink = false, enemyBlink = false, alreadyHit = false;
 unsigned long playerMillisBlink = 0, delayPlayerBlink = 250,
               enemyMillisBlink = 0, delayEnemyBlink = 10,
-              currentGameMillis = 0, delayGame = 1000, highscorePodium = 0;
-byte playerNamePersistable[3] = { 
-  EEPROM.read(0) < (byte)'A' || EEPROM.read(0) > (byte)'Z' ? 'A' : EEPROM.read(0), 
-  EEPROM.read(1) < (byte)'A' || EEPROM.read(1) > (byte)'Z' ? 'A' : EEPROM.read(1),  
-  EEPROM.read(2) < (byte)'A' || EEPROM.read(2) > (byte)'Z' ? 'A' : EEPROM.read(2), 
+              currentGameMillis = 0, delayGame = 1000, highscorePodium = 0,
+              currentTwoGameMillis = 0, delayTwoGame = 2000;
+byte playerNamePersistable[3] = {
+  EEPROM.read(0) < (byte)'A' || EEPROM.read(0) > (byte)'Z' ? 'A' : EEPROM.read(0),
+  EEPROM.read(1) < (byte)'A' || EEPROM.read(1) > (byte)'Z' ? 'A' : EEPROM.read(1),
+  EEPROM.read(2) < (byte)'A' || EEPROM.read(2) > (byte)'Z' ? 'A' : EEPROM.read(2),
 };
 
 void computeFovBasedOnPlayerPosition() {
@@ -260,6 +262,12 @@ void onEnemyMove() {
 }
 
 void onBombExplodes(unsigned int i, unsigned int j) {
+  if (volumeToggle) {
+    tone(buzzerPin, 1000, 300);
+    delay(200);
+    noTone(buzzerPin);
+  }
+
   for (unsigned int x = 0; x < 2 * DIRECTIONS; x++) {
     int currentX = i + di[x], currentY = j + dj[x];
     if (currentX < MAX_ARENA_SIZE - 1 && currentX > 0 && currentY > 0 && currentY < MAX_ARENA_SIZE - 1) {
@@ -372,15 +380,16 @@ void lcdShowMenu() {
         }
         delay(250);
 
+        gameState = INTRO_SCREEN;
+        gamemodeInit = false;
+        showOnceMessage = false;
+
         lc.clearDisplay(0);
         for (unsigned int i = 0; i < 8; i++) {
           for (unsigned int j = 0; j < 8; j++) {
             lc.setLed(0, i, j, HIGH);
           }
         }
-
-        gameState = INTRO_SCREEN;
-        showOnceMessage = false;
         break;
       }
     case GAME_SCREEN:
@@ -756,6 +765,7 @@ void setup() {
 
   pinMode(swPin, INPUT_PULLUP);
   pinMode(pwmPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
   analogWrite(pwmPin, lcdBrightness);
   lcd.createChar(0, bombChar);
   lcd.createChar(1, heartChar);
@@ -767,6 +777,9 @@ void setup() {
   delay(250);  // It doesn't matter if the whole system freezes because it's for the hello message screen not needed for complex delaying with millis
 
   gameState = INTRO_SCREEN;
+  tone(buzzerPin, 1000, 200);
+  delay(200);
+  noTone(buzzerPin);
 }
 
 void loop() {
@@ -828,21 +841,23 @@ void loop() {
     case SETTINGS_SCREEN:
       {
         if ((millis() - currentScrollTime) > menuScrollTime && (yValue < DEFAULT_AXIS_POS - 1 || yValue > DEFAULT_AXIS_POS + 1)) {
+          currentScrollTime = millis();
           switch (menuSelection) {
             case 0:
               {
-                matrixBrightness += (yValue < 7) ? 1 : -1, currentScrollTime = millis();
-                matrixBrightness = matrixBrightness % 256;
-                lc.setIntensity(0, matrixBrightness);
+                lcdBrightness += (yValue < 7) ? 1 : -1;
+                lcdBrightness = lcdBrightness % 256;
 
+                analogWrite(pwmPin, lcdBrightness);
                 lcdShowMenu();
                 break;
               }
             case 1:
               {
-                lcdBrightness += (yValue < 7) ? 1 : -1, currentScrollTime = millis();
-                lcdBrightness = lcdBrightness % 256;
+                matrixBrightness += (yValue < 7) ? 1 : -1;
+                matrixBrightness = matrixBrightness % 256;
 
+                lc.setIntensity(0, matrixBrightness);
                 lcdShowMenu();
                 break;
               }
@@ -892,6 +907,11 @@ void loop() {
           gameSeconds--;
 
           lcdShowMenu();
+          onEnemyMove();
+        }
+
+        if ((millis() - currentTwoGameMillis) > delayTwoGame && gameSeconds > 0) {
+          currentTwoGameMillis = millis();
           onEnemyMove();
         }
 
