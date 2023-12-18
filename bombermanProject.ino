@@ -264,8 +264,6 @@ void onEnemyMove() {
 void onBombExplodes(unsigned int i, unsigned int j) {
   if (volumeToggle) {
     tone(buzzerPin, 1000, 300);
-    delay(200);
-    noTone(buzzerPin);
   }
 
   for (unsigned int x = 0; x < 2 * DIRECTIONS; x++) {
@@ -905,9 +903,9 @@ void loop() {
           alreadyHit = false;
           currentGameMillis = millis();
           gameSeconds--;
+          noTone(buzzerPin);
 
           lcdShowMenu();
-          onEnemyMove();
         }
 
         if ((millis() - currentTwoGameMillis) > delayTwoGame && gameSeconds > 0) {
