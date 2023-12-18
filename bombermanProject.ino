@@ -279,7 +279,7 @@ void onBombExplodes(unsigned int i, unsigned int j) {
     int foundEnemyIndex = -1;
     for (unsigned int y = 0; y < szEnemy && foundEnemyIndex == -1; y++) {
       if (enemies[y][0] == currentX && enemies[y][1] == currentY) {
-        foundEnemyIndex = j;
+        foundEnemyIndex = y;
       }
     }
 
