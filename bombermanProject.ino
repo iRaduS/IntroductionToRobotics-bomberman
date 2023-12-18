@@ -125,7 +125,11 @@ bool gamemodeInit = false, playerBlink = false, enemyBlink = false, alreadyHit =
 unsigned long playerMillisBlink = 0, delayPlayerBlink = 250,
               enemyMillisBlink = 0, delayEnemyBlink = 10,
               currentGameMillis = 0, delayGame = 1000, highscorePodium = 0;
-byte playerNamePersistable[3] = { (byte)'A', (byte)'A', (byte)'A' };
+byte playerNamePersistable[3] = { 
+  EEPROM.read(0) < (byte)'A' || EEPROM.read(0) > (byte)'Z' ? 'A' : EEPROM.read(0), 
+  EEPROM.read(1) < (byte)'A' || EEPROM.read(1) > (byte)'Z' ? 'A' : EEPROM.read(1),  
+  EEPROM.read(2) < (byte)'A' || EEPROM.read(2) > (byte)'Z' ? 'A' : EEPROM.read(2), 
+};
 
 void computeFovBasedOnPlayerPosition() {
   fovTopLeft[0] = playerPos[0] - PLAYER_CENTER < 0 ? 0 : (playerPos[0] - PLAYER_CENTER > (MAX_ARENA_SIZE / 2) ? 8 : playerPos[0] - PLAYER_CENTER);
@@ -146,6 +150,7 @@ bool isProtectionZone(unsigned int i, unsigned int j) {
 }
 
 void onGameFinish() {
+  gameSeconds = 0;
   highscorePodium = 0;
   if (EEPROM.read(9) <= score) {
     EEPROM.update(6, EEPROM.read(0));
@@ -168,6 +173,7 @@ void onGameFinish() {
   }
 
   gameState = END_GAME_SCREEN;
+  lcdShowMenu();
 }
 
 void onGameInit() {
@@ -365,6 +371,13 @@ void lcdShowMenu() {
           }
         }
         delay(250);
+
+        lc.clearDisplay(0);
+        for (unsigned int i = 0; i < 8; i++) {
+          for (unsigned int j = 0; j < 8; j++) {
+            lc.setLed(0, i, j, HIGH);
+          }
+        }
 
         gameState = INTRO_SCREEN;
         showOnceMessage = false;
@@ -749,9 +762,9 @@ void setup() {
   lcd.createChar(2, emptyHeartChar);
   lcd.createChar(3, clockChar);
 
-  // gameState = HELLO_SCREEN;
-  // lcdShowMenu();
-  // delay(250);  // It doesn't matter if the whole system freezes because it's for the hello message screen not needed for complex delaying with millis
+  gameState = HELLO_SCREEN;
+  lcdShowMenu();
+  delay(250);  // It doesn't matter if the whole system freezes because it's for the hello message screen not needed for complex delaying with millis
 
   gameState = INTRO_SCREEN;
 }
@@ -873,7 +886,7 @@ void loop() {
 
         computeFovBasedOnPlayerPosition();
 
-        if ((millis() - currentGameMillis) > delayGame) {
+        if ((millis() - currentGameMillis) > delayGame && gameSeconds > 0) {
           alreadyHit = false;
           currentGameMillis = millis();
           gameSeconds--;
